@@ -3,241 +3,217 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Lodówka v8 - Panel Wyboru</title>
+    <title>Smart Lodówka Rodzinna</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    
     <style>
-        :root { --primary: #4040a0; --green: #28a745; --red: #dc3545; --orange: #fd7e14; --light: #f4f4f9; }
+        :root { --primary: #4040a0; --green: #28a745; --red: #dc3545; --light: #f4f4f9; }
         body { font-family: -apple-system, sans-serif; margin: 0; background: var(--light); padding: 10px; }
-        
-        #status { background: white; padding: 12px; border-radius: 10px; text-align: center; margin-bottom: 10px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-size: 14px; }
+        #loginScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--primary); color: white; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+        .login-box { width: 85%; max-width: 320px; }
+        input { width: 100%; padding: 15px; border-radius: 10px; border: none; margin: 8px 0; font-size: 16px; text-align: center; box-sizing: border-box; }
+        .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 16px; }
+        .btn-main { background: var(--green); color: white; }
+        .btn-sub { background: rgba(255,255,255,0.2); color: white; font-size: 12px; }
+        #mainApp { display: none; }
+        #status { background: white; padding: 12px; border-radius: 10px; text-align: center; margin-bottom: 10px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-size: 12px; }
         #reader { width: 100%; border-radius: 12px; overflow: hidden; background: black; }
-        
-        .modes { display: flex; gap: 10px; margin: 15px 0; }
-        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; color: #555; background: #ddd; }
-        .mode-btn.active { color: white; transform: scale(1.05); }
-        .btn-in.active { background: var(--green); }
-        .btn-out.active { background: var(--red); }
-
-        /* MODAL / PANEL WYBORU */
-        #inputModal { 
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; 
-        }
-        .modal-content { 
-            background: white; width: 90%; max-width: 400px; padding: 20px; border-radius: 15px; 
-            text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
-        .modal-content input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        
-        .date-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0; }
-        .date-btn { background: #f0f0f0; border: 1px solid #ccc; padding: 10px 5px; border-radius: 8px; font-size: 12px; cursor: pointer; }
-        .date-btn:active { background: var(--primary); color: white; }
-
-        .save-btn { background: var(--green); color: white; width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 10px; }
-        .cancel-btn { background: none; border: none; color: #888; margin-top: 15px; cursor: pointer; }
-
-        /* LISTY */
         .section { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
-        .item-name { font-weight: 600; font-size: 15px; }
-        .item-expiry { font-size: 11px; margin-top: 2px; }
-        .expiry-warning { color: var(--orange); font-weight: bold; }
-        .expiry-expired { color: var(--red); font-weight: bold; }
         .btn-action { background: #f0f0f0; border: none; border-radius: 5px; padding: 5px 12px; font-size: 18px; }
+        #inputModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 85%; padding: 20px; border-radius: 15px; text-align: center; }
     </style>
 </head>
 <body>
 
-    <div id="status">Skieruj aparat na kod</div>
-    <div id="reader"></div>
-
-    <div class="modes">
-        <button id="modeIn" class="mode-btn btn-in active" onclick="setMode('IN')">📥 DODAJĘ</button>
-        <button id="modeOut" class="mode-btn btn-out" onclick="setMode('OUT')">🗑️ WYRZUCAM</button>
-    </div>
-
-    <!-- PANEL WYBORU (MODAL) -->
-    <div id="inputModal">
-        <div class="modal-content">
-            <h3 id="modalTitle">Dodaj produkt</h3>
-            <input type="text" id="prodName" placeholder="Nazwa produktu">
-            
-            <div id="dateSection">
-                <p style="font-size: 12px; color: #666; margin-bottom: 5px;">Wybierz termin ważności:</p>
-                <div class="date-grid">
-                    <button class="date-btn" onclick="setDate(0)">Dzisiaj</button>
-                    <button class="date-btn" onclick="setDate(2)">+2 dni</button>
-                    <button class="date-btn" onclick="setDate(5)">+5 dni</button>
-                    <button class="date-btn" onclick="setDate(14)">+2 tyg.</button>
-                    <button class="date-btn" onclick="setDate(30)">+1 mies.</button>
-                    <button class="date-btn" onclick="setDate(180)">+6 mies.</button>
-                </div>
-                <input type="date" id="prodExpiry">
+    <div id="loginScreen">
+        <div class="login-box">
+            <h1>Moja Lodówka</h1>
+            <div id="step1">
+                <p>Wpisz nazwę swojej rodziny:</p>
+                <input type="text" id="groupInput" placeholder="np. Nowakowie">
+                <button class="btn btn-main" onclick="checkGroupName()">SPRAWDŹ NAZWĘ</button>
             </div>
-
-            <button class="save-btn" onclick="confirmSave()">ZAPISZ</button>
-            <button class="cancel-btn" onclick="closeModal()">Anuluj</button>
+            <div id="step2" style="display:none">
+                <p id="groupStatusMsg"></p>
+                <input type="password" id="pinInput" placeholder="PIN (4 cyfry)">
+                <button id="actionBtn" class="btn btn-main" onclick="handleGroupAction()">WEJDŹ</button>
+                <button class="btn btn-sub" onclick="resetLogin()">Zmień nazwę grupy</button>
+            </div>
         </div>
     </div>
 
-    <div class="section">
-        <h2>🧊 W LODÓWCE</h2>
-        <div id="fridgeList"></div>
+    <div id="mainApp">
+        <div id="status">Synchronizacja...</div>
+        <div id="reader"></div>
+        <div style="display:flex; gap:10px; margin: 15px 0;">
+            <button id="btnIn" class="btn btn-main" onclick="setMode('IN')" style="background:var(--green); margin:0">📥 DODAJ</button>
+            <button id="btnOut" class="btn btn-main" onclick="setMode('OUT')" style="background:var(--red); margin:0">🗑️ WYRZUĆ</button>
+        </div>
+        <div class="section">
+            <h2 id="groupTitle" style="font-size:12px; color:#999; margin:0"></h2>
+            <h2 style="font-size:18px; margin: 5px 0;">🧊 W LODÓWCE</h2>
+            <div id="fridgeList"></div>
+        </div>
+        <div class="section">
+            <h2 style="font-size:18px;">📝 ZAKUPY</h2>
+            <div id="shoppingList"></div>
+        </div>
+        <button class="btn btn-sub" style="color:#666" onclick="logout()">Wyloguj</button>
     </div>
 
-    <div class="section">
-        <h2>📝 DO KUPIENIA</h2>
-        <div id="shoppingList"></div>
+    <div id="inputModal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Produkt</h3>
+            <input type="text" id="prodName" placeholder="Nazwa">
+            <input type="date" id="prodExpiry">
+            <button class="btn btn-main" onclick="confirmSave()">ZAPISZ</button>
+            <button onclick="closeModal()" style="border:none; background:none; color:#999; margin-top:10px;">Anuluj</button>
+        </div>
     </div>
 
 <script>
+    // --- TWOJA KONFIGURACJA FIREBASE ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyDzrSIpxGumZy0zylxLqyPodVjztWTe6nI",
+      authDomain: "mojalodowka-da436.firebaseapp.com",
+      // UWAGA: Jeśli baza nie działa, sprawdź ten URL w zakładce Realtime Database
+      databaseURL: "https://mojalodowka-da436-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "mojalodowka-da436",
+      storageBucket: "mojalodowka-da436.firebasestorage.app",
+      messagingSenderId: "356587852761",
+      appId: "1:356587852761:web:ff28759f7e9ec790b63fc8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let groupId = localStorage.getItem('fGroupId');
+    let groupPin = localStorage.getItem('fGroupPin');
     let mode = 'IN';
-    let currentScan = { code: null, name: "" };
+    let fridge = [], shoppingList = [], currentCode = null;
+    let nameCache = JSON.parse(localStorage.getItem('nCache')) || {};
 
-    let fridge = JSON.parse(localStorage.getItem('fridge')) || [];
-    let shoppingList = JSON.parse(localStorage.getItem('shoppingList')) || [];
-    let nameCache = JSON.parse(localStorage.getItem('nameCache')) || {};
-
-    const statusEl = document.getElementById('status');
-    const modal = document.getElementById('inputModal');
-
-    function setMode(m) {
-        mode = m;
-        document.getElementById('modeIn').classList.toggle('active', mode === 'IN');
-        document.getElementById('modeOut').classList.toggle('active', mode === 'OUT');
-    }
-
-    async function onScanSuccess(decodedText) {
-        if (navigator.vibrate) navigator.vibrate(100);
-        html5QrCode.pause();
-        
-        currentScan.code = decodedText;
-        let cachedName = nameCache[decodedText] || "";
-        
-        statusEl.innerText = "🔍 Szukam: " + decodedText;
-
-        if (!cachedName) {
-            try {
-                const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${decodedText}.json?fields=product_name,brands`);
-                const data = await res.json();
-                if (data.status === 1) {
-                    cachedName = (data.product.product_name || "") + (data.product.brands ? ` (${data.product.brands})` : "");
-                }
-            } catch (e) { console.error(e); }
+    async function checkGroupName() {
+        const name = document.getElementById('groupInput').value.trim().toLowerCase();
+        if (name.length < 3) return alert("Min. 3 znaki!");
+        const snapshot = await db.ref('groups/' + name + '/pin').once('value');
+        const exists = snapshot.exists();
+        document.getElementById('step1').style.display = 'none';
+        document.getElementById('step2').style.display = 'block';
+        const msg = document.getElementById('groupStatusMsg');
+        if (exists) {
+            msg.innerText = "Grupa '" + name + "' istnieje. Podaj PIN:";
+        } else {
+            msg.innerText = "Nazwa '" + name + "' wolna! Ustal PIN:";
         }
-
-        openModal(decodedText, cachedName);
+        window.tempGroupName = name;
+        window.groupExists = exists;
     }
 
-    function openModal(code, name) {
-        currentScan.code = code;
+    async function handleGroupAction() {
+        const pin = document.getElementById('pinInput').value;
+        if (pin.length < 4) return alert("PIN min. 4 cyfry!");
+        const name = window.tempGroupName;
+        if (window.groupExists) {
+            const snapshot = await db.ref('groups/' + name + '/pin').once('value');
+            if (snapshot.val() == pin) loginSuccess(name, pin);
+            else alert("Błędny PIN!");
+        } else {
+            await db.ref('groups/' + name).set({ pin: pin });
+            loginSuccess(name, pin);
+        }
+    }
+
+    function loginSuccess(name, pin) {
+        localStorage.setItem('fGroupId', name);
+        localStorage.setItem('fGroupPin', pin);
+        location.reload();
+    }
+
+    function logout() {
+        localStorage.clear();
+        location.reload();
+    }
+
+    if (groupId && groupPin) {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainApp').style.display = 'block';
+        document.getElementById('groupTitle').innerText = "RODZINA: " + groupId.toUpperCase();
+        db.ref('groups/' + groupId + '/fridge').on('value', s => { fridge = s.val() || []; render(); });
+        db.ref('groups/' + groupId + '/shoppingList').on('value', s => { shoppingList = s.val() || []; render(); });
+        initScanner();
+    }
+
+    function initScanner() {
+        const html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, (code) => {
+            if (navigator.vibrate) navigator.vibrate(100);
+            html5QrCode.pause();
+            currentCode = code;
+            let name = nameCache[code] || "";
+            if(!name) {
+                fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name`)
+                .then(r => r.json()).then(d => openModal(d.status === 1 ? d.product.product_name : ""));
+            } else openModal(name);
+        });
+        window.scanner = html5QrCode;
+    }
+
+    function openModal(name) {
         document.getElementById('prodName').value = name;
         document.getElementById('prodExpiry').value = "";
-        document.getElementById('modalTitle').innerText = mode === 'IN' ? "Dodaj do lodówki" : "Wyrzuć z lodówki";
-        document.getElementById('dateSection').style.display = mode === 'IN' ? "block" : "none";
-        modal.style.display = "flex";
-    }
-
-    function setDate(days) {
-        let d = new Date();
-        d.setDate(d.getDate() + days);
-        document.getElementById('prodExpiry').value = d.toISOString().split('T')[0];
+        document.getElementById('inputModal').style.display = 'flex';
     }
 
     function confirmSave() {
-        let name = document.getElementById('prodName').value;
-        let expiry = document.getElementById('prodExpiry').value;
-        let code = currentScan.code;
-
-        if (!name) { alert("Wpisz nazwę!"); return; }
-
-        // Zapisz do cache nazw
-        nameCache[code] = name;
-        localStorage.setItem('nameCache', JSON.stringify(nameCache));
-
+        const name = document.getElementById('prodName').value;
+        const expiry = document.getElementById('prodExpiry').value;
+        if (!name) return;
+        nameCache[currentCode] = name;
+        localStorage.setItem('nCache', JSON.stringify(nameCache));
         if (mode === 'IN') {
-            fridge.push({ id: Date.now(), code: code, name: name, expiry: expiry });
-            shoppingList = shoppingList.filter(item => item !== name);
+            fridge.push({ id: Date.now(), name: name, expiry: expiry, code: currentCode });
+            shoppingList = shoppingList.filter(n => n !== name);
         } else {
-            let idx = fridge.findIndex(i => i.code === code || i.name === name);
+            let idx = fridge.findIndex(i => i.code === currentCode || i.name === name);
             if (idx !== -1) fridge.splice(idx, 1);
             if (!shoppingList.includes(name)) shoppingList.push(name);
         }
-
-        saveAll();
+        db.ref('groups/' + groupId + '/fridge').set(fridge);
+        db.ref('groups/' + groupId + '/shoppingList').set(shoppingList);
         closeModal();
     }
 
-    function closeModal() {
-        modal.style.display = "none";
-        html5QrCode.resume();
-        statusEl.innerText = "Skaner gotowy";
-    }
+    function closeModal() { document.getElementById('inputModal').style.display = 'none'; window.scanner.resume(); }
 
-    function saveAll() {
-        localStorage.setItem('fridge', JSON.stringify(fridge));
-        localStorage.setItem('shoppingList', JSON.stringify(shoppingList));
-        render();
+    function render() {
+        const fList = document.getElementById('fridgeList');
+        fridge.sort((a,b) => (a.expiry || '9') > (b.expiry || '9') ? 1 : -1);
+        fList.innerHTML = fridge.map(item => `
+            <div class="list-item">
+                <div><b>${item.name}</b><br><small>${item.expiry || 'Brak daty'}</small></div>
+                <button class="btn-action" onclick="moveToShopping(${item.id})">✕</button>
+            </div>`).join('');
+        const sList = document.getElementById('shoppingList');
+        sList.innerHTML = shoppingList.map(n => `
+            <div class="list-item"><b style="color:var(--red)">🛒 ${n}</b><button class="btn-action" onclick="removeShopping('${n}')">✕</button></div>
+        `).join('');
     }
 
     function moveToShopping(id) {
         const item = fridge.find(i => i.id === id);
-        if (item) {
-            if (!shoppingList.includes(item.name)) shoppingList.push(item.name);
-            fridge = fridge.filter(i => i.id !== id);
-            saveAll();
-        }
+        if (item && !shoppingList.includes(item.name)) shoppingList.push(item.name);
+        db.ref('groups/' + groupId + '/fridge').set(fridge.filter(i => i.id !== id));
+        db.ref('groups/' + groupId + '/shoppingList').set(shoppingList);
     }
 
-    function removeShopping(name) {
-        shoppingList = shoppingList.filter(item => item !== name);
-        saveAll();
-    }
-
-    function render() {
-        const fList = document.getElementById('fridgeList');
-        let sorted = [...fridge].sort((a, b) => {
-            if (!a.expiry) return 1;
-            if (!b.expiry) return -1;
-            return new Date(a.expiry) - new Date(b.expiry);
-        });
-
-        fList.innerHTML = sorted.length ? "" : "<p style='color:#ccc; font-size:12px;'>Lodówka jest pusta</p>";
-        sorted.forEach(item => {
-            let exp = getExpInfo(item.expiry);
-            fList.innerHTML += `
-                <div class="list-item">
-                    <div class="item-info">
-                        <span class="item-name">${item.name}</span>
-                        <span class="item-expiry ${exp.class}">${exp.text}</span>
-                    </div>
-                    <button class="btn-action" onclick="moveToShopping(${item.id})">✕</button>
-                </div>`;
-        });
-
-        const sList = document.getElementById('shoppingList');
-        sList.innerHTML = shoppingList.length ? "" : "<p style='color:#ccc; font-size:12px;'>Wszystko jest</p>";
-        shoppingList.forEach(name => {
-            sList.innerHTML += `
-                <div class="list-item">
-                    <span class="item-name" style="color:var(--red)">🛒 ${name}</span>
-                    <button class="btn-action" onclick="removeShopping('${name}')">✕</button>
-                </div>`;
-        });
-    }
-
-    function getExpInfo(date) {
-        if (!date) return { text: "Bez daty", class: "" };
-        let diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / 86400000);
-        if (diff < 0) return { text: "PRZETERMINOWANE", class: "expiry-expired" };
-        if (diff <= 3) return { text: "TERMIN BLISKO", class: "expiry-warning" };
-        return { text: "Ważne do: " + date, class: "" };
-    }
-
-    const html5QrCode = new Html5Qrcode("reader");
-    html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: { width: 250, height: 150 } }, onScanSuccess);
-
-    render();
+    function removeShopping(name) { db.ref('groups/' + groupId + '/shoppingList').set(shoppingList.filter(n => n !== name)); }
+    function setMode(m) { mode = m; document.getElementById('btnIn').style.opacity = m === 'IN' ? 1 : 0.5; document.getElementById('btnOut').style.opacity = m === 'OUT' ? 1 : 0.5; }
+    function resetLogin() { document.getElementById('step2').style.display = 'none'; document.getElementById('step1').style.display = 'block'; }
 </script>
 </body>
 </html>
