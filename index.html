@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Skaner Lodówki v3</title>
+    <!-- Biblioteka skanera -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        :root { --primary: #4040a0; --green: #28a745; --red: #dc3545; --light: #f8f9fa; }
+        body { font-family: sans-serif; margin: 0; background: var(--light); padding: 15px; }
+        #reader { width: 100%; border-radius: 12px; background: #000; margin-bottom: 10px; }
+        #status { 
+            background: #fff; padding: 15px; border-radius: 8px; text-align: center; 
+            margin-bottom: 10px; font-weight: bold; border: 2px solid #ddd;
+        }
+        .mode-selector { display: flex; gap: 10px; margin-bottom: 15px; }
+        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; opacity: 0.5; }
+        .mode-btn.active { opacity: 1; color: white; }
+        .btn-in.active { background: var(--green); }
+        .btn-out.active { background: var(--red); }
+        .section { background: white; border-radius: 12px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .list-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+        #debug-log { font-size: 10px; color: red; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="status">Czekam na kamerę...</div>
+    <div id="reader"></div>
+    <div id="debug-log"></div>
+
+    <div class="mode-selector">
+        <button id="modeIn" class="mode-btn btn-in active" onclick="setMode('IN')">📥 DODAJ</button>
+        <button id="modeOut" class="mode-btn btn-out" onclick="setMode('OUT')">🗑️ WYRZUĆ</button>
+    </div>
+
+    <div class="section">
+        <h2>🧊 W lodówce</h2>
+        <div id="fridgeList"></div>
+    </div>
+
+    <div class="section">
+        <h2>📝 Lista zakupów</h2>
+        <div id="shoppingList"></div>
+    </div>
+
+<script>
+    const statusEl = document.getElementById('status');
+    const debugEl = document.getElementById('debug-log');
+    
+    // Funkcja do logowania błędów widoczna na telefonie
+    function logError(msg) {
+        debugEl.innerHTML += "BŁĄD: " + msg + "<br>";
+        console.error(msg);
+    }
+
+    let mode = 'IN';
+    let fridge = JSON.parse(localStorage.getItem('fridge')) || {};
+    let shoppingList = JSON.parse(localStorage.getItem('shoppingList')) || [];
+
+    function setMode(m) {
+        mode = m;
+        document.getElementById('modeIn').classList.toggle('active', mode === 'IN');
+        document.getElementById('modeOut').classList.toggle('active', mode === 'OUT');
+    }
+
+    async function onScanSuccess(decodedText) {
+        if (navigator.vibrate) navigator.vibrate(100);
+        html5QrCode.pause();
+        
+        statusEl.innerText = "Zeskanowano: " + decodedText;
+        
+        // Szybka nazwa tymczasowa (można rozbudować o API później)
+        let name = "Produkt " + decodedText.slice(-4);
+        
+        if (mode === 'IN') {
+            fridge[decodedText] = { name: name, qty: (fridge[decodedText]?.qty || 0) + 1 };
+        } else {
+            if (fridge[decodedText]) {
+                fridge[decodedText].qty--;
+                if (fridge[decodedText].qty <= 0) delete fridge[decodedText];
+            }
+            if (!shoppingList.includes(name)) shoppingList.push(name);
+        }
+        
+        localStorage.setItem('fridge', JSON.stringify(fridge));
+        localStorage.setItem('shoppingList', JSON.stringify(shoppingList));
+        render();
+
+        setTimeout(() => html5QrCode.resume(), 2000);
+    }
+
+    function render() {
+        const fList = document.getElementById('fridgeList');
+        fList.innerHTML = "";
+        for (let code in fridge) {
+            fList.innerHTML += `<div class="list-item"><span>${fridge[code].name}</span><b>${fridge[code].qty} szt.</b></div>`;
+        }
+        
+        const sList = document.getElementById('shoppingList');
+        sList.innerHTML = shoppingList.map(item => `<div class="list-item">${item}</div>`).join('');
+    }
+
+    // START SKANERA
+    const html5QrCode = new Html5Qrcode("reader");
+    
+    // Sprawdź czy strona jest na HTTPS
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+        logError("PRZEGLĄDARKA BLOKUJE KAMERĘ: Strona musi być na HTTPS!");
+    }
+
+    const config = { 
+        fps: 15, 
+        qrbox: { width: 250, height: 150 },
+        aspectRatio: 1.0 
+    };
+
+    html5QrCode.start(
+        { facingMode: "environment" }, 
+        config, 
+        onScanSuccess
+    ).then(() => {
+        statusEl.innerText = "Skaner gotowy! Skieruj na kod.";
+    }).catch(err => {
+        logError("Nie udało się odpalić kamery: " + err);
+        statusEl.innerText = "Błąd kamery. Zobacz logi poniżej.";
+    });
+
+    render();
+</script>
+</body>
+</html>
