@@ -3,34 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Lodówka v7 - Fix</title>
+    <title>Smart Lodówka v8 - Panel Wyboru</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <style>
         :root { --primary: #4040a0; --green: #28a745; --red: #dc3545; --orange: #fd7e14; --light: #f4f4f9; }
-        body { font-family: -apple-system, sans-serif; margin: 0; background: var(--light); padding: 10px; padding-bottom: 50px; }
-        #status { background: white; padding: 12px; border-radius: 10px; text-align: center; margin-bottom: 10px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-size: 14px; min-height: 1.2em; }
+        body { font-family: -apple-system, sans-serif; margin: 0; background: var(--light); padding: 10px; }
+        
+        #status { background: white; padding: 12px; border-radius: 10px; text-align: center; margin-bottom: 10px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-size: 14px; }
         #reader { width: 100%; border-radius: 12px; overflow: hidden; background: black; }
+        
         .modes { display: flex; gap: 10px; margin: 15px 0; }
-        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 10px; font-weight: bold; font-size: 13px; cursor: pointer; color: #555; background: #ddd; }
-        .mode-btn.active { color: white; transform: scale(1.05); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; color: #555; background: #ddd; }
+        .mode-btn.active { color: white; transform: scale(1.05); }
         .btn-in.active { background: var(--green); }
         .btn-out.active { background: var(--red); }
-        .section { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        h2 { margin: 0 0 10px 0; font-size: 14px; color: var(--primary); text-transform: uppercase; }
+
+        /* MODAL / PANEL WYBORU */
+        #inputModal { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; 
+        }
+        .modal-content { 
+            background: white; width: 90%; max-width: 400px; padding: 20px; border-radius: 15px; 
+            text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .modal-content input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        
+        .date-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0; }
+        .date-btn { background: #f0f0f0; border: 1px solid #ccc; padding: 10px 5px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+        .date-btn:active { background: var(--primary); color: white; }
+
+        .save-btn { background: var(--green); color: white; width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 10px; }
+        .cancel-btn { background: none; border: none; color: #888; margin-top: 15px; cursor: pointer; }
+
+        /* LISTY */
+        .section { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
-        .item-info { display: flex; flex-direction: column; flex: 1; }
         .item-name { font-weight: 600; font-size: 15px; }
-        .item-expiry { font-size: 12px; margin-top: 2px; }
-        .expiry-ok { color: #666; }
+        .item-expiry { font-size: 11px; margin-top: 2px; }
         .expiry-warning { color: var(--orange); font-weight: bold; }
         .expiry-expired { color: var(--red); font-weight: bold; }
-        .btn-action { background: #f0f0f0; border: none; border-radius: 5px; padding: 5px 12px; color: #666; cursor: pointer; font-size: 18px; }
-        .manual-add { width: 100%; padding: 12px; background: white; border: 2px dashed #ccc; border-radius: 10px; color: #666; font-weight: bold; margin-bottom: 15px; cursor: pointer; }
+        .btn-action { background: #f0f0f0; border: none; border-radius: 5px; padding: 5px 12px; font-size: 18px; }
     </style>
 </head>
 <body>
 
-    <div id="status">Inicjalizacja kamery...</div>
+    <div id="status">Skieruj aparat na kod</div>
     <div id="reader"></div>
 
     <div class="modes">
@@ -38,7 +56,29 @@
         <button id="modeOut" class="mode-btn btn-out" onclick="setMode('OUT')">🗑️ WYRZUCAM</button>
     </div>
 
-    <button class="manual-add" onclick="manualAdd()">+ DODAJ RĘCZNIE (BEZ KODU)</button>
+    <!-- PANEL WYBORU (MODAL) -->
+    <div id="inputModal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Dodaj produkt</h3>
+            <input type="text" id="prodName" placeholder="Nazwa produktu">
+            
+            <div id="dateSection">
+                <p style="font-size: 12px; color: #666; margin-bottom: 5px;">Wybierz termin ważności:</p>
+                <div class="date-grid">
+                    <button class="date-btn" onclick="setDate(0)">Dzisiaj</button>
+                    <button class="date-btn" onclick="setDate(2)">+2 dni</button>
+                    <button class="date-btn" onclick="setDate(5)">+5 dni</button>
+                    <button class="date-btn" onclick="setDate(14)">+2 tyg.</button>
+                    <button class="date-btn" onclick="setDate(30)">+1 mies.</button>
+                    <button class="date-btn" onclick="setDate(180)">+6 mies.</button>
+                </div>
+                <input type="date" id="prodExpiry">
+            </div>
+
+            <button class="save-btn" onclick="confirmSave()">ZAPISZ</button>
+            <button class="cancel-btn" onclick="closeModal()">Anuluj</button>
+        </div>
+    </div>
 
     <div class="section">
         <h2>🧊 W LODÓWCE</h2>
@@ -52,89 +92,92 @@
 
 <script>
     let mode = 'IN';
-    const statusEl = document.getElementById('status');
+    let currentScan = { code: null, name: "" };
 
-    // BEZPIECZNE WCZYTYWANIE DANYCH
-    let fridge = JSON.parse(localStorage.getItem('fridge'));
-    if (!Array.isArray(fridge)) fridge = []; // Wymuszenie formatu listy (fix dla błędu)
-
+    let fridge = JSON.parse(localStorage.getItem('fridge')) || [];
     let shoppingList = JSON.parse(localStorage.getItem('shoppingList')) || [];
     let nameCache = JSON.parse(localStorage.getItem('nameCache')) || {};
+
+    const statusEl = document.getElementById('status');
+    const modal = document.getElementById('inputModal');
 
     function setMode(m) {
         mode = m;
         document.getElementById('modeIn').classList.toggle('active', mode === 'IN');
         document.getElementById('modeOut').classList.toggle('active', mode === 'OUT');
-        statusEl.innerText = mode === 'IN' ? "Tryb: DODAWANIE" : "Tryb: WYRZUCANIE";
     }
 
     async function onScanSuccess(decodedText) {
         if (navigator.vibrate) navigator.vibrate(100);
         html5QrCode.pause();
-        statusEl.innerText = "🔍 Przetwarzam kod: " + decodedText;
         
-        let name = nameCache[decodedText];
+        currentScan.code = decodedText;
+        let cachedName = nameCache[decodedText] || "";
+        
+        statusEl.innerText = "🔍 Szukam: " + decodedText;
 
-        if (!name) {
+        if (!cachedName) {
             try {
-                const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${decodedText}.json?fields=product_name,brands`);
-                const data = await response.json();
+                const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${decodedText}.json?fields=product_name,brands`);
+                const data = await res.json();
                 if (data.status === 1) {
-                    name = (data.product.product_name || "") + (data.product.brands ? ` (${data.product.brands})` : "");
+                    cachedName = (data.product.product_name || "") + (data.product.brands ? ` (${data.product.brands})` : "");
                 }
-            } catch (e) { console.error("Błąd API:", e); }
+            } catch (e) { console.error(e); }
         }
 
-        // Jeśli nazwa nadal pusta lub nieznana
-        if (!name || name.toLowerCase().includes("nieznany")) {
-            name = prompt("Wpisz nazwę produktu:", name || "");
-        }
-
-        if (name) {
-            nameCache[decodedText] = name;
-            let expiry = "";
-            if (mode === 'IN') {
-                expiry = prompt("Data ważności (np. 05.12):", "");
-                expiry = formatExpiry(expiry);
-            }
-            updateData(decodedText, name, expiry);
-            statusEl.innerText = "✅ Zapisano: " + name;
-        } else {
-            statusEl.innerText = "Anulowano dodawanie.";
-        }
-
-        setTimeout(() => { html5QrCode.resume(); }, 1500);
+        openModal(decodedText, cachedName);
     }
 
-    function formatExpiry(val) {
-        if (!val || !val.includes('.')) return "";
-        try {
-            let parts = val.split('.');
-            let d = parts[0].padStart(2, '0');
-            let m = parts[1].padStart(2, '0');
-            let y = new Date().getFullYear();
-            return `${y}-${m}-${d}`;
-        } catch (e) { return ""; }
+    function openModal(code, name) {
+        currentScan.code = code;
+        document.getElementById('prodName').value = name;
+        document.getElementById('prodExpiry').value = "";
+        document.getElementById('modalTitle').innerText = mode === 'IN' ? "Dodaj do lodówki" : "Wyrzuć z lodówki";
+        document.getElementById('dateSection').style.display = mode === 'IN' ? "block" : "none";
+        modal.style.display = "flex";
     }
 
-    function updateData(code, name, expiry) {
+    function setDate(days) {
+        let d = new Date();
+        d.setDate(d.getDate() + days);
+        document.getElementById('prodExpiry').value = d.toISOString().split('T')[0];
+    }
+
+    function confirmSave() {
+        let name = document.getElementById('prodName').value;
+        let expiry = document.getElementById('prodExpiry').value;
+        let code = currentScan.code;
+
+        if (!name) { alert("Wpisz nazwę!"); return; }
+
+        // Zapisz do cache nazw
+        nameCache[code] = name;
+        localStorage.setItem('nameCache', JSON.stringify(nameCache));
+
         if (mode === 'IN') {
             fridge.push({ id: Date.now(), code: code, name: name, expiry: expiry });
             shoppingList = shoppingList.filter(item => item !== name);
         } else {
-            let index = fridge.findIndex(item => item.name === name || item.code === code);
-            if (index !== -1) fridge.splice(index, 1);
+            let idx = fridge.findIndex(i => i.code === code || i.name === name);
+            if (idx !== -1) fridge.splice(idx, 1);
             if (!shoppingList.includes(name)) shoppingList.push(name);
         }
-        saveAndRender();
+
+        saveAll();
+        closeModal();
     }
 
-    function manualAdd() {
-        let name = prompt("Nazwa produktu:");
-        if (name) {
-            let expiry = prompt("Data ważności (np. 05.12):", "");
-            updateData("MANUAL-" + Date.now(), name, formatExpiry(expiry));
-        }
+    function closeModal() {
+        modal.style.display = "none";
+        html5QrCode.resume();
+        statusEl.innerText = "Skaner gotowy";
+    }
+
+    function saveAll() {
+        localStorage.setItem('fridge', JSON.stringify(fridge));
+        localStorage.setItem('shoppingList', JSON.stringify(shoppingList));
+        render();
     }
 
     function moveToShopping(id) {
@@ -142,48 +185,38 @@
         if (item) {
             if (!shoppingList.includes(item.name)) shoppingList.push(item.name);
             fridge = fridge.filter(i => i.id !== id);
-            saveAndRender();
+            saveAll();
         }
     }
 
     function removeShopping(name) {
         shoppingList = shoppingList.filter(item => item !== name);
-        saveAndRender();
-    }
-
-    function saveAndRender() {
-        localStorage.setItem('fridge', JSON.stringify(fridge));
-        localStorage.setItem('shoppingList', JSON.stringify(shoppingList));
-        localStorage.setItem('nameCache', JSON.stringify(nameCache));
-        render();
+        saveAll();
     }
 
     function render() {
         const fList = document.getElementById('fridgeList');
-        
-        // Sortowanie
-        let sortedFridge = [...fridge].sort((a, b) => {
+        let sorted = [...fridge].sort((a, b) => {
             if (!a.expiry) return 1;
             if (!b.expiry) return -1;
             return new Date(a.expiry) - new Date(b.expiry);
         });
 
-        fList.innerHTML = sortedFridge.length ? "" : "<p style='color:#ccc; font-size:13px;'>Lodówka jest pusta</p>";
-        
-        sortedFridge.forEach(item => {
-            let status = getExpiryStatus(item.expiry);
+        fList.innerHTML = sorted.length ? "" : "<p style='color:#ccc; font-size:12px;'>Lodówka jest pusta</p>";
+        sorted.forEach(item => {
+            let exp = getExpInfo(item.expiry);
             fList.innerHTML += `
                 <div class="list-item">
                     <div class="item-info">
                         <span class="item-name">${item.name}</span>
-                        <span class="item-expiry ${status.class}">${status.text}</span>
+                        <span class="item-expiry ${exp.class}">${exp.text}</span>
                     </div>
                     <button class="btn-action" onclick="moveToShopping(${item.id})">✕</button>
                 </div>`;
         });
 
         const sList = document.getElementById('shoppingList');
-        sList.innerHTML = shoppingList.length ? "" : "<p style='color:#ccc; font-size:13px;'>Brak braków</p>";
+        sList.innerHTML = shoppingList.length ? "" : "<p style='color:#ccc; font-size:12px;'>Wszystko jest</p>";
         shoppingList.forEach(name => {
             sList.innerHTML += `
                 <div class="list-item">
@@ -193,21 +226,16 @@
         });
     }
 
-    function getExpiryStatus(dateStr) {
-        if (!dateStr) return { text: "Bez daty", class: "expiry-ok" };
-        const now = new Date(); now.setHours(0,0,0,0);
-        const exp = new Date(dateStr);
-        const diffDays = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
-        if (isNaN(diffDays)) return { text: "Zły format daty", class: "expiry-ok" };
-        if (diffDays < 0) return { text: `PO TERMINIE (${dateStr})`, class: "expiry-expired" };
-        if (diffDays <= 3) return { text: `TERMIN BLISKO (${dateStr})`, class: "expiry-warning" };
-        return { text: `Ważne do: ${dateStr}`, class: "expiry-ok" };
+    function getExpInfo(date) {
+        if (!date) return { text: "Bez daty", class: "" };
+        let diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / 86400000);
+        if (diff < 0) return { text: "PRZETERMINOWANE", class: "expiry-expired" };
+        if (diff <= 3) return { text: "TERMIN BLISKO", class: "expiry-warning" };
+        return { text: "Ważne do: " + date, class: "" };
     }
 
     const html5QrCode = new Html5Qrcode("reader");
-    html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: { width: 250, height: 150 } }, onScanSuccess)
-        .then(() => statusEl.innerText = "Skaner gotowy!")
-        .catch(e => statusEl.innerText = "Błąd kamery: " + e);
+    html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: { width: 250, height: 150 } }, onScanSuccess);
 
     render();
 </script>
